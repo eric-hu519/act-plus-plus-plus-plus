@@ -2,15 +2,19 @@ import pathlib
 import os
 
 ### Task parameters
-DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
+DATA_DIR = '/home/mamager/Documents/scripted_sim' 
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted':{
         'dataset_dir': DATA_DIR + '/sim_transfer_cube_scripted',
         'num_episodes': 50,
         'episode_len': 400,
-        'camera_names': ['top', 'left_wrist', 'right_wrist']
+        'camera_names': ['top']
     },
-
+    'aloha_screw_driver':{
+        'dataset_dir': DATA_DIR + '/aloha_screw_driver',
+        'episode_len': 1500,
+        'camera_names': ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
+    },
     'sim_transfer_cube_human':{
         'dataset_dir': DATA_DIR + '/sim_transfer_cube_human',
         'num_episodes': 50,
@@ -32,11 +36,11 @@ SIM_TASK_CONFIGS = {
         'camera_names': ['top']
     },
     'all': {
-        'dataset_dir': DATA_DIR + '/',
+        'dataset_dir': DATA_DIR ,#+ '/',
         'num_episodes': None,
         'episode_len': None,
         'name_filter': lambda n: 'sim' not in n,
-        'camera_names': ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
+        'camera_names': ['top']#, 'cam_left_wrist', 'cam_right_wrist']
     },
 
     'sim_transfer_cube_scripted_mirror':{
@@ -57,10 +61,10 @@ SIM_TASK_CONFIGS = {
 
 ### Simulation envs fixed constants
 DT = 0.02
-FPS = 50
+FPS = 25
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
-
+CLOSE_ARM_POSE = [0, -1.76, 1.46, 0, 0.2, 0]
 XML_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/assets/' # note: absolute path
 
 # Left finger position limits (qpos[7]), right_finger = -1 * left_finger

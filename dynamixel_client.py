@@ -388,7 +388,9 @@ class DynamixelReader:
         errored_ids = []
         for i, motor_id in enumerate(self.motor_ids):
             # Check if the data is available.
-            available = self.operation.isAvailable(motor_id, self.address,
+            #print(motor_id.shape)
+            #print(self.address.shape)
+            available = self.operation.isAvailable (motor_id, self.address,
                                                    self.size)
             if not available:
                 errored_ids.append(motor_id)

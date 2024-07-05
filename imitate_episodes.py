@@ -23,8 +23,10 @@ from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 
 from sim_env import BOX_POSE
+import subprocess
 
 import IPython
+
 e = IPython.embed
 
 def get_auto_index(dataset_dir):
@@ -36,6 +38,7 @@ def get_auto_index(dataset_dir):
 
 def main(args):
     set_seed(1)
+    # 执行 source 命令，并且获取环境变量
     # command line parameters
     is_eval = args['eval']
     ckpt_dir = args['ckpt_dir']
@@ -52,10 +55,12 @@ def main(args):
 
     # get task parameters
     is_sim = task_name[:4] == 'sim_'
+    #is_sim = args['is_sim']
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS
         task_config = SIM_TASK_CONFIGS[task_name]
     else:
+        #sys.path.append("..")
         from aloha_scripts.constants import TASK_CONFIGS
         task_config = TASK_CONFIGS[task_name]
     dataset_dir = task_config['dataset_dir']
@@ -135,25 +140,27 @@ def main(args):
         'seed': args['seed'],
         'temporal_agg': args['temporal_agg'],
         'camera_names': camera_names,
-        'real_robot': not is_sim,
+        'real_robot': not args['is_sim'],
         'load_pretrain': args['load_pretrain'],
         'actuator_config': actuator_config,
+        'fuse_real': args['fuse_real'],
+        'opposite_dir': args['opposite_dir'],
     }
 
     if not os.path.isdir(ckpt_dir):
         os.makedirs(ckpt_dir)
     config_path = os.path.join(ckpt_dir, 'config.pkl')
     expr_name = ckpt_dir.split('/')[-1]
-    if not is_eval:
-        wandb.init(project="mobile-aloha2", reinit=True, entity="mobile-aloha2", name=expr_name)
-        wandb.config.update(config)
-    with open(config_path, 'wb') as f:
-        pickle.dump(config, f)
+    #if not is_eval:
+        #wandb.init(project="mobile-aloha2", reinit=True, entity="1107deeplearning", name=expr_name)
+        #wandb.config.update(config)
+    #with open(config_path, 'wb') as f:
+        #pickle.dump(config, f)
     if is_eval:
-        ckpt_names = [f'policy_last.ckpt']
+        ckpt_names = [f'policy_last.ckpt']#policy_last.ckpt
         results = []
         for ckpt_name in ckpt_names:
-            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=10)
+            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=5,real_robot=(not args['is_sim']))   # ljy num_rollouts=5
             # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
             results.append([ckpt_name, success_rate, avg_return])
 
@@ -176,7 +183,7 @@ def main(args):
     ckpt_path = os.path.join(ckpt_dir, f'policy_best.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Best ckpt, val loss {min_val_loss:.6f} @ step{best_step}')
-    wandb.finish()
+    #wandb.finish()
 
 
 def make_policy(policy_class, policy_config):
@@ -212,7 +219,7 @@ def get_image(ts, camera_names, rand_crop_resize=False):
     curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
 
     if rand_crop_resize:
-        print('rand crop resize is used!')
+        #print('rand crop resize is used!')
         original_size = curr_image.shape[-2:]
         ratio = 0.95
         curr_image = curr_image[..., int(original_size[0] * (1 - ratio) / 2): int(original_size[0] * (1 + ratio) / 2),
@@ -225,11 +232,12 @@ def get_image(ts, camera_names, rand_crop_resize=False):
     return curr_image
 
 
-def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
+def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=2, real_robot=False):
     set_seed(1000)
     ckpt_dir = config['ckpt_dir']
     state_dim = config['state_dim']
     real_robot = config['real_robot']
+    
     policy_class = config['policy_class']
     onscreen_render = config['onscreen_render']
     policy_config = config['policy_config']
@@ -287,25 +295,33 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     #         post_processed_actions = post_process(all_actions.squeeze(0).cpu().numpy())
     #         norm_episode_all_base_actions += actuator_norm(post_processed_actions[:, -2:]).tolist()
 
-    pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std']
+    pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std'] 
+    print(pre_process)  #ljy
     if policy_class == 'Diffusion':
         post_process = lambda a: ((a + 1) / 2) * (stats['action_max'] - stats['action_min']) + stats['action_min']
     else:
         post_process = lambda a: a * stats['action_std'] + stats['action_mean']
-
+    #real_robot = True
     # load environment
     if real_robot:
+        #sys.path.append("..")
         from aloha_scripts.robot_utils import move_grippers # requires aloha
         from aloha_scripts.real_env import make_real_env # requires aloha
-        env = make_real_env(init_node=True, setup_robots=True, setup_base=True)
+        env = make_real_env(init_node=True, setup_robots=True, setup_base=False,is_record=True)
         env_max_reward = 0
     else:
         from sim_env import make_sim_env
         env = make_sim_env(task_name)
         env_max_reward = env.task.max_reward
+        #sys.path.append("..")
+        if config['fuse_real']:
+            from aloha_scripts.robot_utils import move_grippers # requires aloha
+            from aloha_scripts.real_env import make_real_env # requires aloha
+            real_env = make_real_env(init_node=True, setup_robots=True, setup_base=False,is_record=True)
 
     query_frequency = policy_config['num_queries']
     if temporal_agg:
+        #print("temporal aggregation is used")
         query_frequency = 1
         num_queries = policy_config['num_queries']
     if real_robot:
@@ -316,20 +332,26 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
     episode_returns = []
     highest_rewards = []
+    opposite_dir = config['opposite_dir']
     for rollout_id in range(num_rollouts):
-        if real_robot:
-            e()
+        #if real_robot:
+            #e()
         rollout_id += 0
         ### set task
         if 'sim_transfer_cube' in task_name:
             BOX_POSE[0] = sample_box_pose() # used in sim reset
+            #opposite_dir = True
+            if real_robot:
+                camera_names = ['cam_high'] 
         elif 'sim_insertion' in task_name:
             BOX_POSE[0] = np.concatenate(sample_insertion_pose()) # used in sim reset
 
         ts = env.reset()
+        if config['fuse_real']:
+            real_ts = real_env.reset(opposite_dir=opposite_dir)
 
         ### onscreen render
-        if onscreen_render:
+        if onscreen_render and not real_robot:
             ax = plt.subplot()
             plt_img = ax.imshow(env._physics.render(height=480, width=640, camera_id=onscreen_cam))
             plt.ion()
@@ -361,19 +383,50 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 ### process previous timestep to get qpos and image_list
                 time2 = time.time()
                 obs = ts.observation
+                if config['fuse_real']:
+                    real_obs = real_ts.observation
                 if 'images' in obs:
                     image_list.append(obs['images'])
                 else:
                     image_list.append({'main': obs['image']})
-                qpos_numpy = np.array(obs['qpos'])
+                #qpos_numpy = np.array(obs['qpos'])
+                #use real robot qpos
+                if config['fuse_real']:
+                    qpos_numpy = np.array(real_obs['qpos'])
+                    if config['opposite_dir']:
+                        qpos_numpy[0] += 1.6
+                        qpos_numpy[7] -= 1.6
+                else:
+                    qpos_numpy = np.array(obs['qpos'])
                 qpos_history_raw[t] = qpos_numpy
                 qpos = pre_process(qpos_numpy)
                 qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+                if config['opposite_dir']:
+                    qpos[0][0] += 1.6
+                    qpos[0][7] -= 1.6
+                plt.ion()
                 # qpos_history[:, t] = qpos
                 if t % query_frequency == 0:
                     curr_image = get_image(ts, camera_names, rand_crop_resize=(config['policy_class'] == 'Diffusion'))
+                    
+                    '''
+                    l_cam = curr_image[0,1,:,:,:].cpu().numpy()
+                    #reshape l_cam from 3*480*640 to 480*640*3
+                    l_cam = np.transpose(l_cam, (1,2,0))
+                    #change from BGR to RBG
+                    l_cam = l_cam[...,::-1]
+                    #change type to unit8
+                    l_cam = (l_cam*255).astype(np.uint8)
+                    l_cam = transforms.ToPILImage()(l_cam).convert("RGB")
+                    #display image
+                    plt.imshow(l_cam)
+                    plt.draw()
+                    plt.pause(0.001)
+                    #print(curr_image.shape)
+                    #curr_image = torch.zeros([1,1,3,480,640]).cuda()
                 # print('get image: ', time.time() - time2)
-
+                plt.ioff()
+                '''
                 if t == 0:
                     # warm up
                     for _ in range(10):
@@ -397,9 +450,26 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                             all_actions = policy(qpos, curr_image)
                         # if use_actuator_net:
                         #     collect_base_action(all_actions, norm_episode_all_base_actions)
-                        if real_robot:
-                            all_actions = torch.cat([all_actions[:, :-BASE_DELAY, :-2], all_actions[:, BASE_DELAY:, -2:]], dim=2)
+                        #if real_robot:
+                            #all_actions = torch.cat([all_actions[:, :-BASE_DELAY, :-2], all_actions[:, BASE_DELAY:, -2:]], dim=2)
+                            #print(all_actions[:, :-BASE_DELAY, :-2].shape, all_actions[:, BASE_DELAY:, -2:].shape) #(ljy)
+
                     if temporal_agg:
+                        #if real_robot:
+                            #if num_queries >= 87:
+                                #num_queries = 87
+                        #print('temporal aggregation is used')
+                        #num_queries = 80        #ljyis_eval
+                        # 我们可以创建一个形状为 [1, 80-67, 16] 的零张量
+                        #zero_padding = torch.zeros((1, 80 - all_actions.shape[1], 16),device = device) #ljy
+
+                        # 然后将 all_actions 和零张量在第二个维度上进行合并
+                        #all_actions = torch.cat([all_actions, zero_padding], dim=1) #ljy
+                        # 现在 all_actions 的形状为 [1, 80, 16]，可以赋值给 all_time_actions 的子集
+
+
+
+
                         all_time_actions[[t], t:t+num_queries] = all_actions
                         actions_for_curr_step = all_time_actions[:, t]
                         actions_populated = torch.all(actions_for_curr_step != 0, axis=1)
@@ -418,7 +488,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                     if t % query_frequency == 0:
                         all_actions = policy(qpos, curr_image)
                         # if use_actuator_net:
-                        #     collect_base_action(all_actions, norm_episode_all_base_actions)
+                        #    10000 collect_base_action(all_actions, norm_episode_all_base_actions)
                         if real_robot:
                             all_actions = torch.cat([all_actions[:, :-BASE_DELAY, :-2], all_actions[:, BASE_DELAY:, -2:]], dim=2)
                     raw_action = all_actions[:, t % query_frequency]
@@ -455,9 +525,13 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 ### step the environment
                 time5 = time.time()
                 if real_robot:
+                    #print(target_qpos)
                     ts = env.step(target_qpos, base_action)
                 else:
+                    #print(target_qpos)
                     ts = env.step(target_qpos)
+                    if config['fuse_real']:
+                        real_ts = real_env.step(target_qpos,opposite_act=opposite_dir)
                 # print('step env: ', time.time() - time5)
 
                 ### for visualization
@@ -471,14 +545,17 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 # time.sleep(max(0, DT - duration - culmulated_delay))
                 if duration >= DT:
                     culmulated_delay += (duration - DT)
-                    print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
+                    #print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
                 # else:
                 #     culmulated_delay = max(0, culmulated_delay - (DT - duration))
 
             print(f'Avg fps {max_timesteps / (time.time() - time0)}')
             plt.close()
+        #real_robot = True
         if real_robot:
             move_grippers([env.puppet_bot_left, env.puppet_bot_right], [PUPPET_GRIPPER_JOINT_OPEN] * 2, move_time=0.5)  # open
+            #from aloha_scripts.record_episodes import closing_ceremony
+            #closing_ceremony(env.puppet_bot_left, env.puppet_bot_right)
             # save qpos_history_raw
             log_id = get_auto_index(ckpt_dir)
             np.save(os.path.join(ckpt_dir, f'qpos_{log_id}.npy'), qpos_history_raw)
@@ -560,7 +637,7 @@ def train_bc(train_dataloader, val_dataloader, config):
     train_dataloader = repeater(train_dataloader)
     for step in tqdm(range(num_steps+1)):
         # validation
-        if step % validate_every == 0:
+        if step % validate_every == 0 & step > 0:
             print('validating')
 
             with torch.inference_mode():
@@ -580,7 +657,7 @@ def train_bc(train_dataloader, val_dataloader, config):
                     best_ckpt_info = (step, min_val_loss, deepcopy(policy.serialize()))
             for k in list(validation_summary.keys()):
                 validation_summary[f'val_{k}'] = validation_summary.pop(k)            
-            wandb.log(validation_summary, step=step)
+            #wandb.log(validation_summary, step=step)
             print(f'Val loss:   {epoch_val_loss:.5f}')
             summary_string = ''
             for k, v in validation_summary.items():
@@ -593,8 +670,8 @@ def train_bc(train_dataloader, val_dataloader, config):
             ckpt_name = f'policy_step_{step}_seed_{seed}.ckpt'
             ckpt_path = os.path.join(ckpt_dir, ckpt_name)
             torch.save(policy.serialize(), ckpt_path)
-            success, _ = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=10)
-            wandb.log({'success': success}, step=step)
+            success, _ = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=5) # ljy num_rollouts=10
+            #wandb.log({'success': success}, step=step)
 
         # training
         policy.train()
@@ -605,7 +682,7 @@ def train_bc(train_dataloader, val_dataloader, config):
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
-        wandb.log(forward_dict, step=step) # not great, make training 1-2% slower
+        #wandb.log(forward_dict, step=step) # not great, make training 1-2% slower
 
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
@@ -632,35 +709,38 @@ def repeater(data_loader):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--eval', action='store_true')
-    parser.add_argument('--onscreen_render', action='store_true')
-    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=True)
-    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize', required=True)
-    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=True)
-    parser.add_argument('--batch_size', action='store', type=int, help='batch_size', required=True)
-    parser.add_argument('--seed', action='store', type=int, help='seed', required=True)
-    parser.add_argument('--num_steps', action='store', type=int, help='num_steps', required=True)
-    parser.add_argument('--lr', action='store', type=float, help='lr', required=True)
+    parser.add_argument('--eval', action='store_true',default=False)
+    parser.add_argument('--onscreen_render', action='store_true',default=False)
+    parser.add_argument('--ckpt_dir',default='/home/mamager/interbotix_ws/src/aloha/act-plus-plus/ckpt_rightgrasp', action='store', type=str, help='ckpt_dir')
+    print('ACT')
+    parser.add_argument('--policy_class',default='ACT',action='store', type=str, help='policy_class, capitalize')
+    parser.add_argument('--task_name', default='aloha_right_grasp',action='store', type=str, help='task_name')
+    parser.add_argument('--batch_size',default=4, action='store', type=int, help='batch_size')
+    parser.add_argument('--seed',default=0, action='store', type=int, help='seed')
+    parser.add_argument('--num_steps',default=500000, action='store', type=int, help='num_steps')
+    parser.add_argument('--lr',default=1e-5, action='store', type=float, help='lr')
     parser.add_argument('--load_pretrain', action='store_true', default=False)
-    parser.add_argument('--eval_every', action='store', type=int, default=500, help='eval_every', required=False)
-    parser.add_argument('--validate_every', action='store', type=int, default=500, help='validate_every', required=False)
-    parser.add_argument('--save_every', action='store', type=int, default=500, help='save_every', required=False)
-    parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False)
+    parser.add_argument('--eval_every', action='store', type=int, default=5000000, help='eval_every', required=False)
+    parser.add_argument('--validate_every', action='store', type=int, default=5000000, help='validate_every', required=False)
+    parser.add_argument('--save_every', action='store', type=int, default=100000, help='save_every', required=False)
+    parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False,default='/home/mamager/interbotix_ws/src/aloha/act-plus-plus/ckpt_rightgrasp/policy_last.ckpt')#default='/home/mamager/interbotix_ws/src/aloha/act-plus-plus/ckpt++/policy_step_500000_seed_0.ckpt')
     parser.add_argument('--skip_mirrored_data', action='store_true')
     parser.add_argument('--actuator_network_dir', action='store', type=str, help='actuator_network_dir', required=False)
     parser.add_argument('--history_len', action='store', type=int)
     parser.add_argument('--future_len', action='store', type=int)
     parser.add_argument('--prediction_len', action='store', type=int)
-
+    parser.add_argument('--is_sim', action='store_true', default=False)
+    parser.add_argument('--fuse_real', action='store_true', default=False)
+    parser.add_argument('--opposite_dir', action='store_true', default=False)
     # for ACT
-    parser.add_argument('--kl_weight', action='store', type=int, help='KL Weight', required=False)
-    parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
-    parser.add_argument('--hidden_dim', action='store', type=int, help='hidden_dim', required=False)
-    parser.add_argument('--dim_feedforward', action='store', type=int, help='dim_feedforward', required=False)
-    parser.add_argument('--temporal_agg', action='store_true')
+    parser.add_argument('--kl_weight',default=10, action='store', type=int, help='KL Weight', required=False)
+    parser.add_argument('--chunk_size',default=80, action='store', type=int, help='chunk_size', required=False)
+    parser.add_argument('--hidden_dim',default=512, action='store', type=int, help='hidden_dim', required=False)
+    parser.add_argument('--dim_feedforward',default=3200, action='store', type=int, help='dim_feedforward', required=False)
+    parser.add_argument('--temporal_agg',default=True, action='store_true')
     parser.add_argument('--use_vq', action='store_true')
     parser.add_argument('--vq_class', action='store', type=int, help='vq_class')
     parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim')
-    parser.add_argument('--no_encoder', action='store_true')
+    parser.add_argument('--no_encoder', action='store_true', default=False)
     
     main(vars(parser.parse_args()))

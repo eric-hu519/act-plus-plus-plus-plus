@@ -48,6 +48,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         episode_id, start_ts = self._locate_transition(index)
         dataset_path = self.dataset_path_list[episode_id]
+        #print(dataset_path)
         try:
             # print(dataset_path)
             with h5py.File(dataset_path, 'r') as root:
@@ -71,7 +72,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 qvel = root['/observations/qvel'][start_ts]
                 image_dict = dict()
                 for cam_name in self.camera_names:
+                    #print(root[f'/observations/images/{cam_name}'])
                     image_dict[cam_name] = root[f'/observations/images/{cam_name}'][start_ts]
+
                 
                 if compressed:
                     for cam_name in image_dict.keys():
@@ -154,16 +157,16 @@ def get_norm_stats(dataset_path_list):
     for dataset_path in dataset_path_list:
         try:
             with h5py.File(dataset_path, 'r') as root:
-                qpos = root['/observations/qpos'][()]
+                qpos = root['/observations/qpos'][()]           #qpos.shape: [400, 9]
                 qvel = root['/observations/qvel'][()]
                 if '/base_action' in root:
                     base_action = root['/base_action'][()]
                     base_action = preprocess_base_action(base_action)
                     action = np.concatenate([root['/action'][()], base_action], axis=-1)
                 else:
-                    action = root['/action'][()]
+                    action = root['/action'][()]                            #action.shape: [400, 14]
                     dummy_base_action = np.zeros([action.shape[0], 2])
-                    action = np.concatenate([action, dummy_base_action], axis=-1)
+                    action = np.concatenate([action, dummy_base_action], axis=-1)   #action.shape: [400, 16]
         except Exception as e:
             print(f'Error loading {dataset_path} in get_norm_stats')
             print(e)
@@ -172,6 +175,7 @@ def get_norm_stats(dataset_path_list):
         all_action_data.append(torch.from_numpy(action))
         all_episode_len.append(len(qpos))
     all_qpos_data = torch.cat(all_qpos_data, dim=0)
+    #print(all_qpos_data.shape)
     all_action_data = torch.cat(all_action_data, dim=0)
 
     # normalize action data

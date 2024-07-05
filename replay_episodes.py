@@ -7,15 +7,18 @@ from utils import sample_box_pose, sample_insertion_pose
 from sim_env import BOX_POSE
 from constants import DT
 from visualize_episodes import save_videos
-
+from constants import SIM_TASK_CONFIGS
 import IPython
 e = IPython.embed
 
 
 def main(args):
-    dataset_path = args['dataset_path']
-
-
+    task_name = args['task_name']
+    task_config = SIM_TASK_CONFIGS[task_name]
+    dataset_dir = task_config['dataset_dir']
+    episode_idx = args['episode_idx']
+    dataset_name = f'episode_{episode_idx}'
+    dataset_path = os.path.join(dataset_dir, dataset_name + '.hdf5')
     if not os.path.isfile(dataset_path):
         print(f'Dataset does not exist at \n{dataset_path}\n')
         exit()
@@ -44,5 +47,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_path', action='store', type=str, help='Dataset path.', required=True)
+    parser.add_argument('--dataset_path', action='store', type=str, help='Dataset path.', default='/ckpt+')
+    parser.add_argument('--task_name', action='store', type=str, help='Task name.', default='sim_transfer_cube_scripted')
+    parser.add_argument('--episode_idx', action='store', type=int, help='Episode index.', default=13)
     main(vars(parser.parse_args()))

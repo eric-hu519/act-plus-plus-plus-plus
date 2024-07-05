@@ -182,10 +182,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=True)
-    parser.add_argument('--dataset_dir', action='store', type=str, help='dataset saving dir', required=True)
-    parser.add_argument('--num_episodes', action='store', type=int, help='num_episodes', required=False)
-    parser.add_argument('--onscreen_render', action='store_true')
+    parser.add_argument('--task_name', default='sim_transfer_cube_scripted', action='store', type=str, help='task_name')
+    parser.add_argument('--dataset_dir', default='scripted_sim', action='store', type=str, help='dataset saving dir',)
+    parser.add_argument('--num_episodes', default=50, action='store', type=int, help='num_episodes')
+    parser.add_argument('--onscreen_render', default=True, action='store_true')
     
     main(vars(parser.parse_args()))
 
