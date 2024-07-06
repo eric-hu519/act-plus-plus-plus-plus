@@ -709,9 +709,9 @@ def repeater(data_loader):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--eval', action='store_true',default=False)
+    parser.add_argument('--eval', action='store_true',default=True)
     parser.add_argument('--onscreen_render', action='store_true',default=False)
-    parser.add_argument('--ckpt_dir',default='/home/mamager/interbotix_ws/src/aloha/act-plus-plus/ckpt_rightgrasp', action='store', type=str, help='ckpt_dir')
+    parser.add_argument('--ckpt_dir',default='/home/mamager/Documents/scripted_sim/aloha_right_grasp/ckpt_rightgrasp', action='store', type=str, help='ckpt_dir')
     print('ACT')
     parser.add_argument('--policy_class',default='ACT',action='store', type=str, help='policy_class, capitalize')
     parser.add_argument('--task_name', default='aloha_right_grasp',action='store', type=str, help='task_name')

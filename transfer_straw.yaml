@@ -1,0 +1,25 @@
+#Task Config
+task_name: transfer_straw
+episode_len: 800
+data_dir: ~/Documents/scripted_sim
+dataset_dir: /aloha_right_grasp
+camera_names: cam_high cam_left_wrist cam_right_wrist #指定任务所需摄像头信息
+state_dim: 14
+action_dim: 16
+chunk_size: 80
+#Model Config
+ckpt_dir: /aloha_right_grasp/ckpt_rightgrasp
+kl_weight: 10
+hidden_dim: 512
+dim_feedforward: 3200
+backbone: resnet18
+lr_backbone: 0.00001
+enc_layers: 4
+dec_layers: 7
+nheads: 8
+seed: 0
+temporal_agg: True
+no_encoder: False
+#Traning  Config
+lr: 0.00001
+batch_size: 4

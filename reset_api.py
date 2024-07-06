@@ -1,17 +1,15 @@
 import os
 import h5py
 import numpy as np
-from robot_utils import move_grippers, calibrate_linear_vel, smooth_base_action, postprocess_base_action
+from aloha_scripts.robot_utils import move_grippers, calibrate_linear_vel, smooth_base_action, postprocess_base_action
 import argparse
 import matplotlib.pyplot as plt
-from real_env import make_real_env
-from constants import JOINT_NAMES, PUPPET_GRIPPER_JOINT_OPEN, FPS
+from aloha_scripts.real_env import make_real_env
+from aloha_scripts.constants import JOINT_NAMES, PUPPET_GRIPPER_JOINT_OPEN, FPS
 import time
-from constants import DT, START_ARM_POSE, TASK_CONFIGS, FPS
-from constants import MASTER_GRIPPER_JOINT_MID, PUPPET_GRIPPER_JOINT_CLOSE, PUPPET_GRIPPER_JOINT_OPEN
-from robot_utils import Recorder, ImageRecorder, get_arm_gripper_positions
-from robot_utils import move_arms, torque_on, torque_off, move_grippers
-from real_env import make_real_env, get_action
+from aloha_scripts.constants import DT, START_ARM_POSE, TASK_CONFIGS, FPS
+from aloha_scripts.constants import MASTER_GRIPPER_JOINT_MID, PUPPET_GRIPPER_JOINT_CLOSE, PUPPET_GRIPPER_JOINT_OPEN
+from aloha_scripts.robot_utils import move_arms, torque_on, torque_off, move_grippers
 
 from interbotix_xs_modules.arm import InterbotixManipulatorXS
 #import sys
@@ -30,7 +28,7 @@ def close_arm(close_master = False):
                                               robot_name=f'master_left', init_node=True)
     master_bot_right = InterbotixManipulatorXS(robot_model="wx250s", group_name="arm", gripper_name="gripper",
                                                robot_name=f'master_right', init_node=False)
-    env = make_real_env(init_node=False, setup_robots=False,is_record= True)  #激活两个从动端手爪
+    env = make_real_env(init_node=False, setup_robots=False, is_record=True)  #激活两个从动端手爪
     env.reset()
 
     #划分了两个任务：（1）close_puppet:只需要关闭从动端手抓（用于replay和imitate_episodes的评估任务）；（2）关闭主动和从动端:需要关闭主动端和从动端手爪（用于record任务）
