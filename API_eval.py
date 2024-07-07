@@ -33,7 +33,13 @@ def eval_bc(config,
             num_rollouts = 1, 
             fuse_real = False,
             reset_after_done = True,
-            info_data = None):
+            info_data = None,
+            action_data = None,
+            pause_event = None,
+            obs_ready_event = None,
+            action_ready_event = None,
+            completed_event = None,
+            inference_done = None):
     set_seed(config['seed'])
     ckpt_dir = config['ckpt_dir']
     state_dim = config['state_dim']
@@ -159,8 +165,25 @@ def eval_bc(config,
                     #qpos[0][7] -= 1.6
                 #plt.ion()
                 # qpos_history[:, t] = qpos
+                #将obs的键和值赋值给info_data
+                for key in obs.keys():
+                    info_data[key] = obs[key]
+
+                info_data['current_step'] = t
+                info_data['qpos'] = qpos
+                info_data['time_stamp'] = time2
+                obs_ready_event.set()
+                #wait for pause event
+                change_done = False
+                if pause_event is not None:
+                    while not change_done:
+                        if pause_event.is_set():
+                            pause_event.wait()
+                        else:
+                            info_data = info_data
+                            change_done = True
                 if t % query_frequency == 0:
-                    curr_image = get_image(ts, camera_names, rand_crop_resize= False)
+                    curr_image = get_image(info_data, camera_names)
                     
                     '''
                     l_cam = curr_image[0,1,:,:,:].cpu().numpy()
@@ -180,8 +203,7 @@ def eval_bc(config,
                 # print('get image: ', time.time() - time2)
                 plt.ioff()
                 '''
-                info_data = obs
-                info_data['qpos'] = qpos
+
                 qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
                 if t == 0:
                     # warm up
@@ -239,8 +261,19 @@ def eval_bc(config,
                 # base_action = postprocess_base_action(base_action)
                 # print('post process: ', time.time() - time4)
                 
-                info_data['target_qpos'] = target_qpos
-                info_data['base_action'] = base_action
+                action_data['target_qpos'] = target_qpos
+                action_data['base_action'] = base_action
+                action_ready_event.set()
+                if t == max_timesteps - 1:
+                    inference_done.set()
+                change_done = False
+                if pause_event is not None:
+                    while not change_done:
+                        if pause_event.is_set():
+                            pause_event.wait()
+                        else:
+                            action_data = action_data
+                            change_done = True
                 ### step the environment
                 time5 = time.time()
                 if not is_sim:
@@ -321,26 +354,15 @@ def eval_bc(config,
     if reset_after_done:
         from reset_api import closing_ceremony
         closing_ceremony(env.puppet_bot_left, env.puppet_bot_right)
-        
+    completed_event.set()
 
-def get_image(ts, camera_names, rand_crop_resize=False):
+def get_image(info_data, camera_names):
     curr_images = []
     for cam_name in camera_names:
-        curr_image = rearrange(ts.observation['images'][cam_name], 'h w c -> c h w')
+        curr_image = rearrange(info_data['images'][cam_name], 'h w c -> c h w')
         curr_images.append(curr_image)
     curr_image = np.stack(curr_images, axis=0)
     curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
-
-    if rand_crop_resize:
-        #print('rand crop resize is used!')
-        original_size = curr_image.shape[-2:]
-        ratio = 0.95
-        curr_image = curr_image[..., int(original_size[0] * (1 - ratio) / 2): int(original_size[0] * (1 + ratio) / 2),
-                     int(original_size[1] * (1 - ratio) / 2): int(original_size[1] * (1 + ratio) / 2)]
-        curr_image = curr_image.squeeze(0)
-        resize_transform = transforms.Resize(original_size, antialias=True)
-        curr_image = resize_transform(curr_image)
-        curr_image = curr_image.unsqueeze(0)
     
     return curr_image
 
