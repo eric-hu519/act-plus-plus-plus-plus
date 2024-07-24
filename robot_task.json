@@ -1,0 +1,12 @@
+{
+    "transfer_straw":{ 
+        "id": 1,
+        "config_file": "transfer_straw.yaml",
+        "data_path":"~/DATA",
+        "task_description": "transfer a straw from one hand to another"
+        }
+    }
+    
+
+
+
