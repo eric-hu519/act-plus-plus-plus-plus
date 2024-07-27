@@ -22,12 +22,13 @@ class NodeSDKAPI:
         self.node_id = 'eai.system.robot'
         self._client = nodeclient.NodeClient(self.node_id, node_hub_host=NODE_HUB_HOST)
         self._client.register_method("RobotTask", self._on_start_call)
+        _logger = log.init(APP_NAME, verbose=False)
         #init model with json file
-        self.model = ACT_API(MODEL_DB)
+        self.model = ACT_API(MODEL_DB,_logger)
         self.model_id = None
         self.req_id = None
         #init logger
-        log.init(APP_NAME, verbose=False)
+        
         # Start a thread to monitor the task_event
         self._monitor_thread = threading.Thread(target=self._monitor_task_event)
         self._monitor_thread.daemon = True
@@ -70,36 +71,46 @@ class NodeSDKAPI:
                 log.logger.error("Model not found")
                 self.push(b"Model not found")
                 self.task_event.clear()
+                log.logger.info("Current Request Ended with Error")
                 return
-            self.model.inference_start()
-            #print("task started!")
             self.push(b"Task Begin")
             log.logger.info("Task Begin")
+            self.model.inference_start()
+            #print("task started!")
+            
             time_started = time.time()
             is_inference = True
             inference_time = 0
             #time.sleep(90)
             print(self.model.inference_done.is_set())
-            while not self.model.inference_done.is_set():
+            while not self.model.inference_done.is_set() and not self.model.error_flag.is_set():
                 #print(self.model.inference_done.is_set())
+                
                 """
                 obs_data = self.model.get_obs_info()
                 self.push(obs_data['images']['cam_high'].tobytes())
                 print("obs_data: ",obs_data['time_stamp'])"""
-
-                obs_data = self.model.get_obs_info()#ljy
-                image_data = obs_data['images']['cam_high'].tobytes()
-                #print("com: %d",len(image_data))
-                compressed_data = gzip.compress(image_data)
+                if self.model.error_flag.is_set():
+                    self.push(b"Error in running inference")
+                    print("Error in running inference")
+                    return
+                else:
+                    obs_data = self.model.get_obs_info()#ljy
+                    log.logger.info(f"obs_data: {obs_data['time_stamp']} ")
+                    image_data = obs_data['images']['cam_high'].tobytes()
+                    #print("com: %d",len(image_data))
+                    compressed_data = gzip.compress(image_data)
                 #print(len(compressed_data))
-                self.push(compressed_data)
+                #self.push(compressed_data)
             #print(self.model.inference_done.is_set())
             
             #self.model.inference_done.clear()
             #self.model.completed_event.clear()
             self.model.completed_event.wait()
-            print("completed_event: ",self.model.completed_event.is_set())
-            if self.model.completed_event.is_set():
+            #print("completed_event: ",self.model.completed_event.is_set())
+            
+            if self.model.completed_event.is_set() and not self.model.error_flag.is_set():
+                self.push(b"Task completed")
                 self.task_event.clear()
                 self.model.completed_event.clear()
                 self.model.inference_done.clear()
@@ -107,9 +118,20 @@ class NodeSDKAPI:
                 time_completed = time.time()
                 if self.req_id is not None:
                     self._client.reply_rpc(self.req_id,b"Task completed",nodesdk.ContentType.PB)
-                    print("task completed!")
-                    print(f"Time taken: {time_completed - time_started} s")
+                    #print("task completed!")
+                    log.logger.info("Task completed")
+                    self.push(b"Task completed")
+                    #print(f"Time taken: {time_completed - time_started} s")
+                    log.logger.info(f"Time taken: {time_completed - time_started} s")
                     print("="*40)
+            elif self.model.error_flag.is_set():
+                self.push(b"Error in running inference")
+                self.task_event.clear()
+                self.model.completed_event.clear()
+                self.model.inference_done.clear()
+                self.model.process.terminate()
+                print("Error in running inference")
+                print("="*40)
 
 def main():
     robot_client = NodeSDKAPI()

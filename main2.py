@@ -31,7 +31,8 @@ class NodeSDKAPI:
             logger.error(f"Subscribe error: {err}")
             print("Subscribe error: {err}")
             return#ljy
-        logging.info(f"Subscribe Success")
+        else:
+            logging.info(f"Subscribe Success")
        
         self._client.set_on_message(self._on_message)#ljy
         self.cnt = 0
@@ -39,7 +40,7 @@ class NodeSDKAPI:
 
     def send_rpc_request(self):
         #send RPC request to nodehub
-        err, rc = self._client.send_rpc('eai.system.robot', 'StartTask', b'1', nodesdk.ContentType.PB,timeout=300)
+        err, rc = self._client.send_rpc('eai.system.robot', 'RobotTask', b'1', nodesdk.ContentType.PB,timeout=300)
         return err, rc                                 
     def _on_rpc_sent(_err, _req_id):
         print(f'Send RPC result: {_err}, req_id: {_req_id}')
@@ -48,9 +49,14 @@ class NodeSDKAPI:
         print(f'Receive RPC reply: {reply.req_id}, content: {reply.content}, content_type: {reply.content_type}, source: {reply.source}, timeout: {reply.timeout}')
     
     def _on_message(self, msg):#ljy
-        print(f"Receive message on topic {msg.topic}")
+        logger.info(f"Receive message on topic {msg.topic}")
+        #print(f"Receive message on topic {msg.topic}")
+        #log message
+        #print(f"Message: {msg.payload.decode('utf-8')}")
+        logger.info(f"Message: {msg.payload.decode('utf-8')}")
         #self.cnt +=1
         #print(self.cnt)
+        '''
         try:
             #print(len(msg.payload))
             image_data = gzip.decompress(msg.payload)
@@ -67,6 +73,7 @@ class NodeSDKAPI:
                 logger.error("Failed to decode image")
         except Exception as e:
             logger.error(f"Error processing image message: {e}")
+        '''
     
     @staticmethod
     def _on_subscribe(err,topic_filters):

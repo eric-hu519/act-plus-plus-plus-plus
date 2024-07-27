@@ -16,14 +16,18 @@ import json
 
 MODEL_DICT = "robot_task.json"
 class ACT_API:
-    def __init__(self, model_dict):
-
+    def __init__(self, model_dict, logger=None):
+        #init log
         self.config = None
+        if logger is not None:
+            self._logger = logger
         #model_dict is path to model json file
         #load json file as dict
         with open (model_dict,'r') as f:
             self.model_dict = json.load(f)
-        print("loaded {} models".format(len(self.model_dict)))
+        #print("loaded {} models".format(len(self.model_dict)))
+        if logger is not None:
+            self._logger.info("loaded {} models".format(len(self.model_dict)))
         #set multiprocess method to spawn to avoid cuda error
         try:
             mp.set_start_method("spawn")
@@ -40,6 +44,7 @@ class ACT_API:
         self.action_data_ready = Event()
         #create shared data to store inference results
         self.inference_ready=Event()#ljy
+        self.error_flag = Event()
         # create event to signal waiting for start_inference
         self.info_data = Manager().dict()
         self.action_data = Manager().dict()
@@ -95,6 +100,12 @@ class ACT_API:
         except Exception as error:
             print("Error in running inference:",error)
             print("Inference failed")
+            self.error_flag.set()
+            self.inference_done.set()
+            self.completed_event.set()
+            if self._logger is not None:
+                self._logger.error("Error in running inference:",error)
+            raise error
     def display_obs(self,obs_data):
         if obs_data and 'images' in obs_data:
             for camera_name, img in obs_data['images'].items():

@@ -46,7 +46,14 @@ class NodeSDKAPI:
         print(f'Receive RPC reply: {reply.req_id}, content: {reply.content}, content_type: {reply.content_type}, source: {reply.source}, timeout: {reply.timeout}')
     
 
-
+def parse_request(task_name: str, model_db: str):
+    #find required model_id in MODEL_DB:
+    with open (model_db, 'r') as f:
+        model_db = json.load(f)
+    if task_name in model_db:
+        model_id = model_db[task_name].get('id')
+    else:
+        logger.error(f"Task {task_name} not found in model_db")
 def main():
     # 大模型 输出端口
     url = "http://172.29.220.167:8000/command"
