@@ -1,27 +1,33 @@
 
 from platform import node
+
+from regex import F
 import nodeclient.nodeclient as nodeclient
 import nodesdk_py as nodesdk
 from ACT_API import ACT_API
 import threading
 import log
 import time
+import gzip #ljy
+
 NODE_HUB_HOST = "127.0.0.1"
 ASR_TOPIC = "/eai/system/voice"
 LLM_TOPIC = "/eai/system/command"
 BOT_TOPIC = "/eai/system/robot"
 MODEL_DB = "robot_task.json"
+APP_NAME = "robot_node"
 class NodeSDKAPI:
     def __init__(self):
         self.task_event = threading.Event()
         self.node_id = 'eai.system.robot'
         self._client = nodeclient.NodeClient(self.node_id, node_hub_host=NODE_HUB_HOST)
-        self._client.register_method("StartTask", self._on_start_call)
+        self._client.register_method("RobotTask", self._on_start_call)
         #init model with json file
         self.model = ACT_API(MODEL_DB)
         self.model_id = None
         self.req_id = None
-
+        #init logger
+        log.init(APP_NAME, verbose=False)
         # Start a thread to monitor the task_event
         self._monitor_thread = threading.Thread(target=self._monitor_task_event)
         self._monitor_thread.daemon = True
@@ -35,6 +41,8 @@ class NodeSDKAPI:
                                   qos=nodesdk.Qos.MB_QOS1)
         if not rc:
             log.logger.error(f"Publish error")
+        #else:
+            #print("image data published to {BOT_TOPIC}")
     
     def _on_start_call(self, req_id, content, content_type, source, timeout):
         #log.logger.info(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
@@ -42,7 +50,7 @@ class NodeSDKAPI:
         self.model_id = int(content.decode('utf-8'))# 解码为字符串，然后转换为整数
         self.req_id = req_id
         #model_id = int.from_bytes(content,'big') # content is the task ID in json
-        #log.logger.info(f"model_id: {model_id}")
+        log.logger.info(f"requied model_id: {self.model_id}")
 
         print(f"requested_model_id: {self.model_id}")
         #self._client.reply_rpc(self.req_id,b"Task Begin",nodesdk.ContentType.PB)
@@ -57,9 +65,16 @@ class NodeSDKAPI:
             self.task_event.clear()
     def _inference_event(self):
         if self.task_event.is_set():
-            self.model.init(self.model_id)
+            init_status = self.model.init(self.model_id)
+            if not init_status:
+                log.logger.error("Model not found")
+                self.push(b"Model not found")
+                self.task_event.clear()
+                return
             self.model.inference_start()
-            print("task started!")
+            #print("task started!")
+            self.push(b"Task Begin")
+            log.logger.info("Task Begin")
             time_started = time.time()
             is_inference = True
             inference_time = 0
@@ -67,11 +82,17 @@ class NodeSDKAPI:
             print(self.model.inference_done.is_set())
             while not self.model.inference_done.is_set():
                 #print(self.model.inference_done.is_set())
-
+                """
                 obs_data = self.model.get_obs_info()
                 self.push(obs_data['images']['cam_high'].tobytes())
-                print("obs_data: ",obs_data['time_stamp'])
-            
+                print("obs_data: ",obs_data['time_stamp'])"""
+
+                obs_data = self.model.get_obs_info()#ljy
+                image_data = obs_data['images']['cam_high'].tobytes()
+                #print("com: %d",len(image_data))
+                compressed_data = gzip.compress(image_data)
+                #print(len(compressed_data))
+                self.push(compressed_data)
             #print(self.model.inference_done.is_set())
             
             #self.model.inference_done.clear()

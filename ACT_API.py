@@ -66,10 +66,11 @@ class ACT_API:
     def init(self, model_id):
         config_file = self.find_config_file(model_id)
         if config_file is None:
-            print("Model not found")
-            return
+            #print("Model not found")
+            return False
         else:
             self.config = init_model(config_file)
+            return True
 
     def inference_start(self):
         self.process = Process(target=self.run_inference)

@@ -56,7 +56,7 @@ def closing_ceremony(puppet_bot_left, puppet_bot_right,master_bot_left=None, mas
         PUPPET_CLOSE_ARM_POSE = [0, -1.8600000000000008, 1.5600000000000003, 0, 0.7, 0]
         close_arm_qpos = PUPPET_CLOSE_ARM_POSE[:6]
         move_arms([ puppet_bot_left, puppet_bot_right], [close_arm_qpos] * 2, move_time=1.5)
-                # move grippers to starting position
+                # move grippers to st=arting position
         move_grippers([puppet_bot_left,puppet_bot_right], [PUPPET_GRIPPER_JOINT_CLOSE] * 2, move_time=0.5)
         time.sleep(1.5)
         torque_off(puppet_bot_left)

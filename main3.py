@@ -22,6 +22,8 @@ class NodeSDKAPI:
         self.node_id = 'eai.system.command'
         self._client = nodeclient.NodeClient(node_id=self.node_id, node_hub_host=NODE_HUB_HOST)
 
+        self._client.register_method("API_StartTask", self._recv_llmdata)
+
         err,topic_filter = self._client.subscribe(
             [nodesdk.TopicFilter(topic_filter=BOT_TOPIC, qos=nodesdk.Qos.MB_QOS1)],
             self._on_subscribe
@@ -34,12 +36,23 @@ class NodeSDKAPI:
         logging.info(f"Subscribe Success")
        
         self._client.set_on_message(self._on_message)#ljy
-        self.cnt = 0
+        self.model_id = None
+
+    def _recv_llmdata(self, req_id, content, content_type, source, timeout):
+        #log.logger.info(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
+        print(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
+        self.model_id = content #data_bytes 
+        print(self.model_id)
+        self.req_id = req_id
+        #model_id = int.from_bytes(content,'big') # content is the task ID in json
+        #log.logger.info(f"model_id: {model_id}")
+
+        print(f"requested_model_id: {self.model_id}")        
 
 
     def send_rpc_request(self):
         #send RPC request to nodehub
-        err, rc = self._client.send_rpc('eai.system.robot', 'StartTask', b'1', nodesdk.ContentType.PB,timeout=300)
+        err, rc = self._client.send_rpc('eai.system.robot', 'StartTask', self.model_id, nodesdk.ContentType.PB,timeout=300)
         return err, rc                                 
     def _on_rpc_sent(_err, _req_id):
         print(f'Send RPC result: {_err}, req_id: {_req_id}')
