@@ -1,4 +1,5 @@
 
+import array
 from platform import node
 
 from regex import F
@@ -7,15 +8,21 @@ import nodesdk_py as nodesdk
 from ACT_API import ACT_API
 import threading
 import log
+import cv2
+import requests
 import time
-import gzip #ljy
+import gzip
+import zlib
+from sympy import Array #ljy
 
 NODE_HUB_HOST = "127.0.0.1"
 ASR_TOPIC = "/eai/system/voice"
 LLM_TOPIC = "/eai/system/command"
 BOT_TOPIC = "/eai/system/robot"
-MODEL_DB = "robot_task.json"
+MODEL_DB = "/home/mamager/interbotix_ws/src/aloha/act-plus-plus/robot_task.json"
 APP_NAME = "robot_node"
+IMAGE_URL = "http://127.0.0.1:1115/upload"
+#IMAGE_URL = "http://192.168.31.109:1115/upload"
 class NodeSDKAPI:
     def __init__(self):
         self.task_event = threading.Event()
@@ -42,9 +49,24 @@ class NodeSDKAPI:
                                   qos=nodesdk.Qos.MB_QOS1)
         if not rc:
             log.logger.error(f"Publish error")
-        #else:
+        #else:使用文件传输助手，手机电脑轻松互传文件。
+
+
             #print("image data published to {BOT_TOPIC}")
-    
+    def send_image(self,image_data, url,time_stamp):
+        
+        _, img_encoded = cv2.imencode('.jpg', image_data)
+        img_bytes = img_encoded.tobytes()
+        compressed_img = zlib.compress(img_bytes)
+        headers = {'Content-Type': 'application/octet-stream'}
+
+        # 发送 POST 请求
+        response = requests.post(url, data=compressed_img, headers=headers)
+        if response.status_code == 200:
+            log.logger.info(f"Image sent to {url} at {time_stamp}")
+        else:
+            log.logger.error(f"Failed to send image to {url} at {time_stamp}")
+
     def _on_start_call(self, req_id, content, content_type, source, timeout):
         #log.logger.info(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
         print(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
@@ -57,6 +79,7 @@ class NodeSDKAPI:
         #self._client.reply_rpc(self.req_id,b"Task Begin",nodesdk.ContentType.PB)
         #self._client.reply_rpc(self.req_id,b"Task completed",nodesdk.ContentType.PB)
         self.task_event.set()
+        self._client.reply_rpc(self.req_id,b"Task Recieved",nodesdk.ContentType.PB)
 
     def _monitor_task_event(self):
         while True:
@@ -93,13 +116,17 @@ class NodeSDKAPI:
                 if self.model.error_flag.is_set():
                     self.push(b"Error in running inference")
                     print("Error in running inference")
+                    self.task_event.clear()
+                    self.model.completed_event.clear()
+                    self.model.inference_done.clear()
+                    self.model.process.terminate()
                     return
                 else:
                     obs_data = self.model.get_obs_info()#ljy
                     log.logger.info(f"obs_data: {obs_data['time_stamp']} ")
-                    image_data = obs_data['images']['cam_high'].tobytes()
+                    image_data = obs_data['images']['cam_high']
                     #print("com: %d",len(image_data))
-                    compressed_data = gzip.compress(image_data)
+                    self.send_image(image_data,IMAGE_URL,obs_data['time_stamp'])
                 #print(len(compressed_data))
                 #self.push(compressed_data)
             #print(self.model.inference_done.is_set())
@@ -117,7 +144,7 @@ class NodeSDKAPI:
                 self.model.process.terminate()
                 time_completed = time.time()
                 if self.req_id is not None:
-                    self._client.reply_rpc(self.req_id,b"Task completed",nodesdk.ContentType.PB)
+                    #self._client.reply_rpc(self.req_id,b"Task completed",nodesdk.ContentType.PB)
                     #print("task completed!")
                     log.logger.info("Task completed")
                     self.push(b"Task completed")

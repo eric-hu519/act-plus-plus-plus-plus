@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Copyright (c) 2024 yaqiang.sun.
+# This source code is licensed under the license found in the LICENSE file
+# in the root directory of this source tree.
+#########################################################################
+# Author: yaqiangsun
+# Created Time: 2024/07/11 10:59:21
+########################################################################
+
+
 from platform import node
 import nodeclient.nodeclient as nodeclient
 import nodesdk_py as nodesdk
@@ -7,6 +18,8 @@ import time
 import cv2
 import numpy as np
 import gzip #ljy
+import requests
+import sys
 
 logging.basicConfig(level=logging.INFO) #ljy
 logger = logging.getLogger("robot.main")#ljy
@@ -22,7 +35,6 @@ class NodeSDKAPI:
         self.node_id = 'eai.system.command'
         self._client = nodeclient.NodeClient(node_id=self.node_id, node_hub_host=NODE_HUB_HOST)
 
-        self._client.register_method("API_StartTask", self._recv_llmdata)
 
         err,topic_filter = self._client.subscribe(
             [nodesdk.TopicFilter(topic_filter=BOT_TOPIC, qos=nodesdk.Qos.MB_QOS1)],
@@ -38,16 +50,7 @@ class NodeSDKAPI:
         self._client.set_on_message(self._on_message)#ljy
         self.model_id = None
 
-    def _recv_llmdata(self, req_id, content, content_type, source, timeout):
-        #log.logger.info(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
-        print(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
-        self.model_id = content #data_bytes 
-        print(self.model_id)
-        self.req_id = req_id
-        #model_id = int.from_bytes(content,'big') # content is the task ID in json
-        #log.logger.info(f"model_id: {model_id}")
-
-        print(f"requested_model_id: {self.model_id}")        
+       
 
 
     def send_rpc_request(self):
@@ -80,6 +83,11 @@ class NodeSDKAPI:
                 logger.error("Failed to decode image")
         except Exception as e:
             logger.error(f"Error processing image message: {e}")
+        
+        """        #exit program
+        if msg.payload == b'Task completed':
+            print ("Task complete msg received. Exiting program ")
+            sys.exit(0)"""
     
     @staticmethod
     def _on_subscribe(err,topic_filters):
@@ -90,9 +98,12 @@ class NodeSDKAPI:
 
 
 def main():
+
+
+
     node_sdk = NodeSDKAPI()
-    err, req_id = node_sdk.send_rpc_request()
-    print(f'Send RPC result: {err}, req_id: {req_id}')
+    #err, req_id = node_sdk.send_rpc_request()
+    #print(f'Send RPC result: {err}, req_id: {req_id}')
     while True:
         pass
         """time.sleep(1)
