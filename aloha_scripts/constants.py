@@ -12,7 +12,7 @@ TASK_CONFIGS = {
     },
     'aloha_grasp':{
         'dataset_dir': DATA_DIR + '/aloha_grasp',
-        'episode_len': 1000,
+        'episode_len': 2000,
         'camera_names': ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
     },
         'aloha_left_grasp':{

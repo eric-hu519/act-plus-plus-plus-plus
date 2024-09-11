@@ -1,6 +1,7 @@
 
 import array
 from platform import node
+from socket import timeout
 
 from regex import F
 import nodeclient.nodeclient as nodeclient
@@ -14,6 +15,7 @@ import time
 import gzip
 import zlib
 from sympy import Array #ljy
+from requests.exceptions import Timeout, RequestException
 
 NODE_HUB_HOST = "127.0.0.1"
 ASR_TOPIC = "/eai/system/voice"
@@ -21,8 +23,8 @@ LLM_TOPIC = "/eai/system/command"
 BOT_TOPIC = "/eai/system/robot"
 MODEL_DB = "/home/mamager/interbotix_ws/src/aloha/act-plus-plus/robot_task.json"
 APP_NAME = "robot_node"
-IMAGE_URL = "http://127.0.0.1:1115/upload"
-#IMAGE_URL = "http://192.168.31.109:1115/upload"
+#IMAGE_URL = "http://127.0.0.1:1115/upload"
+IMAGE_URL = "http://192.168.31.109:1115/upload"
 class NodeSDKAPI:
     def __init__(self):
         self.task_event = threading.Event()
@@ -35,7 +37,10 @@ class NodeSDKAPI:
         self.model_id = None
         self.req_id = None
         #init logger
-        
+        self.sent_image = 0
+        self.total_image = 0
+        self.error_image = 0
+
         # Start a thread to monitor the task_event
         self._monitor_thread = threading.Thread(target=self._monitor_task_event)
         self._monitor_thread.daemon = True
@@ -61,12 +66,15 @@ class NodeSDKAPI:
         headers = {'Content-Type': 'application/octet-stream'}
 
         # 发送 POST 请求
-        response = requests.post(url, data=compressed_img, headers=headers)
-        if response.status_code == 200:
-            log.logger.info(f"Image sent to {url} at {time_stamp}")
-        else:
-            log.logger.error(f"Failed to send image to {url} at {time_stamp}")
-
+        try:
+            response = requests.post(url, data=compressed_img, headers=headers, timeout = 0.3)
+            response.raise_for_status()
+            log.logger.info(f"Send image with timestamp of {time_stamp} to {url} successfully")
+            self.sent_image += 1
+        except (Timeout, RequestException) as e:
+            log.logger.error(f"Failed to send image with timestamp of {time_stamp} to {url} with error: {e}")
+            self.error_image += 1
+            return
     def _on_start_call(self, req_id, content, content_type, source, timeout):
         #log.logger.info(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
         print(f"req_id: {req_id}, content: {content}, content_type: {content_type}, source: {source}, timeout: {timeout}")
@@ -76,8 +84,10 @@ class NodeSDKAPI:
         log.logger.info(f"requied model_id: {self.model_id}")
 
         print(f"requested_model_id: {self.model_id}")
+        
         #self._client.reply_rpc(self.req_id,b"Task Begin",nodesdk.ContentType.PB)
         #self._client.reply_rpc(self.req_id,b"Task completed",nodesdk.ContentType.PB)
+
         self.task_event.set()
         self._client.reply_rpc(self.req_id,b"Task Recieved",nodesdk.ContentType.PB)
 
@@ -125,6 +135,7 @@ class NodeSDKAPI:
                     obs_data = self.model.get_obs_info()#ljy
                     log.logger.info(f"obs_data: {obs_data['time_stamp']} ")
                     image_data = obs_data['images']['cam_high']
+                    self.total_image += 1
                     #print("com: %d",len(image_data))
                     self.send_image(image_data,IMAGE_URL,obs_data['time_stamp'])
                 #print(len(compressed_data))
@@ -137,12 +148,14 @@ class NodeSDKAPI:
             #print("completed_event: ",self.model.completed_event.is_set())
             
             if self.model.completed_event.is_set() and not self.model.error_flag.is_set():
-                self.push(b"Task completed")
+                self.push(b"Task completed")    #机器人任务全部完成
                 self.task_event.clear()
                 self.model.completed_event.clear()
                 self.model.inference_done.clear()
                 self.model.process.terminate()
                 time_completed = time.time()
+
+
                 if self.req_id is not None:
                     #self._client.reply_rpc(self.req_id,b"Task completed",nodesdk.ContentType.PB)
                     #print("task completed!")
@@ -150,6 +163,8 @@ class NodeSDKAPI:
                     self.push(b"Task completed")
                     #print(f"Time taken: {time_completed - time_started} s")
                     log.logger.info(f"Time taken: {time_completed - time_started} s")
+                    log.logger.info(f"Total image captured: {self.total_image}, image sent: {self.sent_image}, image error: {self.error_image}")
+                    self.total_image, self.error_image, self.sent_image = 0, 0, 0
                     print("="*40)
             elif self.model.error_flag.is_set():
                 self.push(b"Error in running inference")

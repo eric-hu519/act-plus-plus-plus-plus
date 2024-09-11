@@ -157,8 +157,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_dir', action='store', type=str, help='Dataset dir.', required=False)
     
-    parser.add_argument('--task_name',default= 'aloha_left_grasp', action='store', type=str, help='Task name.', required=False)
-    parser.add_argument('--episode_idx',default='49' , action='store', type=int, help='Episode index.', required=False)
+    parser.add_argument('--task_name',default= 'aloha_grasp', action='store', type=str, help='Task name.', required=False)
+    parser.add_argument('--episode_idx',default='55' , action='store', type=int, help='Episode index.', required=False)
     parser.add_argument('--actuator_network_dir', action='store', type=str, help='actuator_network_dir', required=False)
     parser.add_argument('--history_len', action='store', type=int)
     parser.add_argument('--future_len', action='store', type=int)
