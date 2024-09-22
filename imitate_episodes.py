@@ -709,7 +709,7 @@ def repeater(data_loader):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--eval', action='store_true',default=False)
+    parser.add_argument('--eval', action='store_true',default=True)
     parser.add_argument('--onscreen_render', action='store_true',default=False)
     parser.add_argument('--ckpt_dir',default='/home/mamager/Documents/scripted_sim/aloha_right_grasp/ckpt_rightgrasp', action='store', type=str, help='ckpt_dir')
     print('ACT')

@@ -87,6 +87,7 @@ class NodeSDKAPI:
                 print(f"Failed to decompress data: {e}")
                 return 'Failed to decompress data', 500
 
+            self.push(decompressed_data)  #将得到的结果字节流pub出去
             # 将字节流转换为字符串
             results_str = decompressed_data.decode("utf-8")
             # 将字符串转换为字典
@@ -95,7 +96,7 @@ class NodeSDKAPI:
             # 打印结果
             print(results)
             results_str = str(results)
-            #self.push(results_str)  将得到的结果pub出去
+            
 
             return 'Received results successfully'
        
@@ -175,7 +176,7 @@ class NodeSDKAPI:
     def push_over_to_visiontracker(self, msg):  #将robotnode的进程结束消息发送给物理机2，以便物理机2重启
         max_retries = 3
         attempt = 0
-        print(1111)
+        #print(1111)
         url = 'http://192.168.31.109:1115/taskcomplete'  # 物理机2的地址和taskcomplete路由
         headers = {'Content-Type': 'application/json'}  # 设置HTTP头部为JSON
         data = {'msg': msg}  # 将msg消息包装成一个字典

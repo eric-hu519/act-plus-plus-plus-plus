@@ -39,7 +39,9 @@ def eval_bc(config,
             obs_ready_event = None,
             action_ready_event = None,
             completed_event = None,
-            inference_done = None):
+            inference_done = None,
+            current_step_event = None,
+            current_step_end_event = None):
     set_seed(config['seed'])
     ckpt_dir = config['ckpt_dir']
     state_dim = config['state_dim']
@@ -133,6 +135,7 @@ def eval_bc(config,
             culmulated_delay = 0 
             for t in range(max_timesteps):
                 time1 = time.time()
+                current_step_event.set()
                 ### update onscreen render and wait for DT
                 if onscreen_render and is_sim:
                     image = env._physics.render(height=480, width=640, camera_id=onscreen_cam)
@@ -176,12 +179,16 @@ def eval_bc(config,
                 #wait for pause event
                 change_done = False
                 if pause_event is not None:
-                    while not change_done:
-                        if pause_event.is_set():
-                            pause_event.wait()
+                    #print('waiting')
+                    #等待数据更改事件被设置
+                    if not completed_event.is_set():
+                        pause_event.wait()
+                        pause_event.clear()
+                        info_data = info_data
+                        if info_data['tracker_info'] is None:
+                            print('tracker is None')
                         else:
-                            info_data = info_data
-                            change_done = True
+                            print(f'API_EVAL:step:{t},tracker: {info_data["tracker_info"]}')
                 if t % query_frequency == 0:
                     curr_image = get_image(info_data, camera_names)
                     
@@ -266,14 +273,8 @@ def eval_bc(config,
                 action_ready_event.set()
                 if t == max_timesteps - 1:
                     inference_done.set()
+                    #print('inference done event set')
                 change_done = False
-                if pause_event is not None:
-                    while not change_done:
-                        if pause_event.is_set():
-                            pause_event.wait()
-                        else:
-                            action_data = action_data
-                            change_done = True
                 ### step the environment
                 time5 = time.time()
                 if not is_sim:
@@ -300,6 +301,9 @@ def eval_bc(config,
                     #print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
                 # else:
                 #     culmulated_delay = max(0, culmulated_delay - (DT - duration))
+                
+                #print(f"API_EVAL: step:{t} completed")
+                current_step_end_event.set()
 
             print(f'Avg fps {max_timesteps / (time.time() - time0)}')
         #real_robot = True
@@ -354,6 +358,7 @@ def eval_bc(config,
     if reset_after_done:
         from reset_api import closing_ceremony
         closing_ceremony(env.puppet_bot_left, env.puppet_bot_right)
+        print('Closing ceremony done')
     completed_event.set()
 
 def get_image(info_data, camera_names):
